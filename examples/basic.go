@@ -17,7 +17,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create SMS handler: %v", err)
 	}
-	defer smsHandler.Close()
+	defer func() {
+		if err := smsHandler.Close(); err != nil {
+			log.Printf("Error closing SMS handler: %v", err)
+		}
+	}()
 
 	// Example 1: Send an SMS
 	phoneNumber := "+1234567890" // Replace with actual phone number

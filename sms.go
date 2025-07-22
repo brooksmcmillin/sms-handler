@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -70,7 +71,9 @@ func NewSMSHandler(portName string, baudRate int) (*SMSHandler, error) {
 
 	// Initialize Modem
 	if err := handler.initModem(); err != nil {
-		port.Close()
+		if closeErr := port.Close(); closeErr != nil {
+			log.Printf("Error closing port after init failure: %v", closeErr)
+		}
 		return nil, fmt.Errorf("failed to instantiate modem: %v", err)
 	}
 
@@ -105,7 +108,7 @@ func (s *SMSHandler) sendATCommand(command string) (string, error) {
 
 	// Clear any pending data in the buffer
 	for s.reader.Buffered() > 0 {
-		s.reader.ReadByte()
+		_, _ = s.reader.ReadByte()
 	}
 
 	// Send command
@@ -244,7 +247,10 @@ func (s *SMSHandler) parseSMSList(response string) []SMS {
 			parts := strings.Split(line, ",")
 			if len(parts) >= 4 {
 				var sms SMS
-				fmt.Sscanf(parts[0], "+CMGL: %d", &sms.Index)
+				if _, err := fmt.Sscanf(parts[0], "+CMGL: %d", &sms.Index); err != nil {
+					log.Printf("Error parsing SMS index: %v", err)
+					continue
+				}
 				sms.Status = strings.Trim(parts[1], "\"")
 				sms.Sender = strings.Trim(parts[2], "\"")
 				sms.Date = strings.Trim(parts[3], "\"")
@@ -290,7 +296,10 @@ func (s *SMSHandler) ListenForIncomingSMS(callback func(SMS)) {
 				<-s.resumeChan
 			default:
 				// Check if there's data available to read
-				s.port.SetReadTimeout(100 * time.Millisecond)
+				if err := s.port.SetReadTimeout(100 * time.Millisecond); err != nil {
+					log.Printf("Error setting read timeout: %v", err)
+					continue
+				}
 
 				// Read line by line to properly handle multi-line messages
 				line, err := s.reader.ReadString('\n')
@@ -387,7 +396,10 @@ func (s *SMSHandler) handleCMTMessage(line string, callback func(SMS)) {
 			return
 		default:
 			// Try to read a line
-			s.port.SetReadTimeout(100 * time.Millisecond)
+			if err := s.port.SetReadTimeout(100 * time.Millisecond); err != nil {
+				log.Printf("Error setting read timeout in handleCMTMessage: %v", err)
+				continue
+			}
 			line, err := s.reader.ReadString('\n')
 			if err == nil {
 				line = strings.TrimSpace(line)
@@ -428,7 +440,10 @@ func (s *SMSHandler) handleCMTIMessage(line string, callback func(SMS)) {
 	parts := strings.Split(line, ",")
 	if len(parts) >= 2 {
 		var index int
-		fmt.Sscanf(parts[1], "%d", &index)
+		if _, err := fmt.Sscanf(parts[1], "%d", &index); err != nil {
+			log.Printf("Error parsing SMS index from CMTI: %v", err)
+			return
+		}
 
 		// Read the specific SMS message
 		sms, err := s.readSMSByIndex(index)
@@ -477,7 +492,7 @@ func (s *SMSHandler) SendSMS(phoneNumber, message string) error {
 
 	// Clear any pending data in the buffer
 	for s.reader.Buffered() > 0 {
-		s.reader.ReadByte()
+		_, _ = s.reader.ReadByte()
 	}
 
 	// Small delay to ensure modem is ready
@@ -500,7 +515,9 @@ func (s *SMSHandler) SendSMS(phoneNumber, message string) error {
 
 	for !promptReceived && time.Since(startTime) < 10*time.Second {
 		// Set a short read timeout
-		s.port.SetReadTimeout(100 * time.Millisecond)
+		if err := s.port.SetReadTimeout(100 * time.Millisecond); err != nil {
+			log.Printf("Error setting read timeout while waiting for prompt: %v", err)
+		}
 
 		buf := make([]byte, 1)
 		n, err := s.port.Read(buf)
@@ -539,7 +556,9 @@ func (s *SMSHandler) SendSMS(phoneNumber, message string) error {
 	startTime = time.Now()
 
 	for time.Since(startTime) < 30*time.Second {
-		s.port.SetReadTimeout(100 * time.Millisecond)
+		if err := s.port.SetReadTimeout(100 * time.Millisecond); err != nil {
+			log.Printf("Error setting read timeout while waiting for SMS response: %v", err)
+		}
 
 		buf := make([]byte, 128)
 		n, err := s.port.Read(buf)
