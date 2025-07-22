@@ -76,7 +76,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create SMS handler: %v", err)
 	}
-	defer smsHandler.Close()
+	defer func() {
+		if err := smsHandler.Close(); err != nil {
+			log.Printf("Error closing SMS handler: %v", err)
+		}
+	}()
 
 	fmt.Printf("SMS Chat initialized successfully!\n")
 	fmt.Printf("Connected to phone number: %s\n", phoneNumber)
@@ -96,7 +100,9 @@ func main() {
 	go func() {
 		<-sigChan
 		fmt.Println("\nShutting down...")
-		smsHandler.Close()
+		if err := smsHandler.Close(); err != nil {
+			log.Printf("Error closing SMS handler: %v", err)
+		}
 		os.Exit(0)
 	}()
 
