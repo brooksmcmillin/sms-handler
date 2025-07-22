@@ -74,6 +74,17 @@ sms-cli +1234567890
 
 See the `examples/` directory for more usage examples.
 
+### Usage Example
+```
+SMS Chat initialized successfully!
+Connected to phone number: +11234567890
+Type your messages and press Enter to send. Ctrl+C to exit.
+--------------------------------------------------
+> Hello!
++11234567890 [25/07/22]: Hi!
+> 
+```
+
 ## Requirements
 
 - Go 1.18 or later
